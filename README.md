@@ -1,14 +1,29 @@
-# go-log
+# go-log 🪵
 
-> Tiny zerolog logging for Go services with OpenTelemetry trace correlation
+> Tiny structured logging for Go services on [zerolog](https://github.com/rs/zerolog), with OpenTelemetry `trace_id`/`span_id` correlation baked in.
 
-## Install
+## 📦 Install
 
 ```bash
 go get github.com/Bugs5382/go-log
 ```
 
-## Develop
+## 🚀 Usage
+
+```go
+logger := log.New("my-service")
+logger.Info().Msg("started")
+
+// Inside a request/span, correlate logs with the active trace:
+l := log.Ctx(ctx)
+l.Info().Msg("handling request")
+```
+
+`New` writes JSON to stdout with a timestamp and a `service` field. `Ctx` derives
+a logger that adds `trace_id` and `span_id` from the active OpenTelemetry span,
+pairing with [go-otel](https://github.com/Bugs5382/go-otel). 🔗
+
+## 🛠 Develop
 
 ```bash
 task build    # go build ./...
@@ -17,13 +32,6 @@ task lint     # gofmt check + golangci-lint + yamllint
 task license  # inject MIT headers (golic)
 ```
 
-Commit discipline, AI-tell/emoji blocking, and the pre-push gofmt/vet/lint/test gate are enforced
-by the governance hooks. Install them once per clone:
+## ⚖️ License
 
-```bash
-bash .claude/hooks/install.sh
-```
-
-## License
-
-MIT (c) 2026 Shane
+MIT © 2026 Shane

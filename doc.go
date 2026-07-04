@@ -1,6 +1,5 @@
-// Package log is Tiny zerolog logging for Go services with OpenTelemetry trace correlation
-//
-// Replace this scaffold with the package's real implementation.
+// Package log provides zerolog-based structured logging for Go services, with
+// OpenTelemetry trace_id/span_id correlation drawn from the active span context.
 package log
 
 /*
