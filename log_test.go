@@ -96,3 +96,60 @@ func TestCtxWithoutSpanOmitsTraceID(t *testing.T) {
 		t.Fatalf("did not expect trace_id without a valid span, got %q", out)
 	}
 }
+
+func TestLevelFromEnvFiltersBelow(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "warn")
+	out := captureStdout(t, func() {
+		l := New("billing")
+		l.Info().Msg("hidden")
+		l.Warn().Msg("shown")
+	})
+	if strings.Contains(out, "hidden") {
+		t.Fatalf("info line should be filtered at warn level, got %q", out)
+	}
+	if !strings.Contains(out, "shown") {
+		t.Fatalf("warn line should be emitted, got %q", out)
+	}
+}
+
+func TestLevelDefaultsToInfo(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "")
+	out := captureStdout(t, func() {
+		l := New("billing")
+		l.Debug().Msg("dbg")
+		l.Info().Msg("nfo")
+	})
+	if strings.Contains(out, "dbg") {
+		t.Fatalf("debug should be filtered at the default info level, got %q", out)
+	}
+	if !strings.Contains(out, "nfo") {
+		t.Fatalf("info should be emitted at the default level, got %q", out)
+	}
+}
+
+func TestConsoleFormatIsNotJSON(t *testing.T) {
+	t.Setenv("LOG_FORMAT", "console")
+	out := captureStdout(t, func() {
+		l := New("billing")
+		l.Info().Msg("pretty")
+	})
+	if strings.Contains(out, `{"level"`) {
+		t.Fatalf("console format should not emit JSON, got %q", out)
+	}
+	if !strings.Contains(out, "pretty") {
+		t.Fatalf("expected the message text in console output, got %q", out)
+	}
+}
+
+func TestBothFormatKeepsJSONOnStdout(t *testing.T) {
+	t.Setenv("LOG_FORMAT", "both")
+	// stdout must stay JSON so OTel/Loki can still parse trace_id/span_id even
+	// while a pretty copy goes to stderr.
+	out := captureStdout(t, func() {
+		l := New("billing")
+		l.Info().Msg("dual")
+	})
+	if !strings.Contains(out, `"service":"billing"`) || !strings.Contains(out, `"message":"dual"`) {
+		t.Fatalf("both mode must keep JSON on stdout, got %q", out)
+	}
+}
