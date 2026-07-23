@@ -1,15 +1,4 @@
-// Package log provides zerolog-based structured logging for Go services, with
-// OpenTelemetry trace_id/span_id correlation drawn from the active span
-// context.
-//
-// New and Ctx return a concrete zerolog.Logger for callers that already
-// depend on zerolog. NewLogger and LoggerFromContext return the neutral
-// Logger interface instead: no zerolog type appears in its method
-// signatures, so a consumer can wrap or depend on it without importing
-// zerolog directly. Both paths honor the same LOG_LEVEL/LOG_FORMAT
-// environment controls and the same trace correlation; zerolog stays an
-// internal implementation detail behind the neutral path.
-package log
+package log_test
 
 /*
 MIT License
@@ -33,3 +22,30 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
+
+import (
+	"context"
+	"errors"
+
+	log "github.com/Bugs5382/go-log"
+)
+
+// ExampleLogger shows the neutral surface: a consumer only needs the Logger
+// interface, F, NewLogger, and LoggerFromContext -- zerolog is never
+// imported or referenced.
+func ExampleLogger() {
+	logger := log.NewLogger("billing")
+
+	logger.Info("service started", log.F("port", 8080))
+
+	child := logger.With(log.F("request_id", "r-123"))
+	child.Warn("slow downstream call", log.F("elapsed_ms", 420))
+
+	err := errors.New("payment gateway timeout")
+	child.Error(err, "request failed")
+
+	// Inside a request/span, correlate logs with the active trace without
+	// ever touching a zerolog type.
+	ctx := context.Background()
+	log.LoggerFromContext(ctx).Info("handling request")
+}
