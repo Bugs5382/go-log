@@ -18,6 +18,10 @@ tasks:
     desc: Build all packages
     cmds:
       - go build ./...
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
   test:
     desc: Run tests
     cmds:
@@ -35,6 +39,12 @@ tasks:
         if [ -n "$unformatted" ]; then echo "gofmt needed on:"; echo "$unformatted"; exit 1; fi
       - golangci-lint run
       - yamllint .
+  ci:
+    desc: Full local CI gate -- build, vet, test, and lint (golangci-lint + yamllint)
+    cmds:
+      - task: build
+      - task: vet
+      - task: lint
   lint-init:
     desc: Install lint dependencies via Brew
     cmds:
