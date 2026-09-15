@@ -28,6 +28,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.opentelemetry.io/otel/trace"
@@ -152,4 +153,34 @@ func TestBothFormatKeepsJSONOnStdout(t *testing.T) {
 	if !strings.Contains(out, `"service":"billing"`) || !strings.Contains(out, `"message":"dual"`) {
 		t.Fatalf("both mode must keep JSON on stdout, got %q", out)
 	}
+}
+
+func TestCtxIsRaceFreeWithConcurrentNew(t *testing.T) {
+	traceID, _ := trace.TraceIDFromHex("0102030405060708090a0b0c0d0e0f10")
+	spanID, _ := trace.SpanIDFromHex("0102030405060708")
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), sc)
+
+	captureStdout(t, func() {
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 50; i++ {
+				_ = New("svc-a")
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 50; i++ {
+				l := Ctx(ctx)
+				l.Info().Msg("concurrent")
+			}
+		}()
+		wg.Wait()
+	})
 }

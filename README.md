@@ -23,6 +23,11 @@ l.Info().Msg("handling request")
 a logger that adds `trace_id` and `span_id` from the active OpenTelemetry span,
 pairing with [go-otel](https://github.com/Bugs5382/go-otel). 🔗
 
+> `Ctx` is **deprecated**. Having no receiver, it derives from whichever logger
+> `New` created last, so a process with two loggers cannot get the right
+> `service` from both. Prefer `NewLogger` and the `Logger.Ctx` method below,
+> which derives from the logger it is called on.
+
 ### Neutral `Logger` (no zerolog dependency)
 
 `New` and `Ctx` above return a concrete `zerolog.Logger`, so a wrapper package
@@ -43,15 +48,19 @@ child.Warn("slow downstream call", log.F("elapsed_ms", 420))
 child.Error(err, "request failed")
 
 // Inside a request/span, correlate logs with the active trace:
-l := log.LoggerFromContext(ctx)
+l := logger.Ctx(ctx)
 l.Info("handling request")
 ```
 
 `Logger` covers `Debug`/`Info`/`Warn`/`Error`/`Fatal` with structured
 `Field`s (build one with `log.F(key, val)`), a `With(fields...) Logger` for
-child loggers, and a `Ctx(ctx) Logger` method mirroring the package-level
-`Ctx`. `New`/`Ctx` are unchanged and continue to work side by side with the
-neutral path.
+child loggers, and a `Ctx(ctx) Logger` method. `Logger.Ctx` derives from the
+receiver, so the `service` name and any fields already added with `With` are
+carried onto the correlated logger.
+
+The package-level `Ctx` and `LoggerFromContext` are **deprecated** in favour of
+`Logger.Ctx` -- both read the logger most recently built by `New`, which is
+ambiguous once a process has more than one.
 
 ## 🛠 Develop
 

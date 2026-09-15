@@ -191,3 +191,48 @@ func TestNeutralFatalExits(t *testing.T) {
 		t.Fatalf("expected error field logged before exit, got %q", out)
 	}
 }
+
+func TestLoggerCtxUsesReceiverServiceNotLastNew(t *testing.T) {
+	traceID, _ := trace.TraceIDFromHex("0102030405060708090a0b0c0d0e0f10")
+	spanID, _ := trace.SpanIDFromHex("0102030405060708")
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), sc)
+
+	out := captureStdout(t, func() {
+		media := NewLogger("api-media")
+		_ = NewLogger("importer") // built after media; must not change it
+		media.Ctx(ctx).Info("from-media")
+	})
+	if !strings.Contains(out, `"service":"api-media"`) {
+		t.Fatalf("expected the receiver's service name, got %q", out)
+	}
+	if strings.Contains(out, `"service":"importer"`) {
+		t.Fatalf("Ctx used the most recent New instead of the receiver: %q", out)
+	}
+}
+
+func TestLoggerCtxPreservesWithFields(t *testing.T) {
+	traceID, _ := trace.TraceIDFromHex("0102030405060708090a0b0c0d0e0f10")
+	spanID, _ := trace.SpanIDFromHex("0102030405060708")
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), sc)
+
+	out := captureStdout(t, func() {
+		l := NewLogger("billing").With(F("tenant", "acme"))
+		l.Ctx(ctx).Info("correlated")
+	})
+	if !strings.Contains(out, `"tenant":"acme"`) {
+		t.Fatalf("expected With fields to survive Ctx, got %q", out)
+	}
+	if !strings.Contains(out, `"trace_id":"`+traceID.String()+`"`) {
+		t.Fatalf("expected trace_id alongside With fields, got %q", out)
+	}
+}

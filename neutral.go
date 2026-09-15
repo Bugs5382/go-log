@@ -27,6 +27,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Field is a structured key/value pair attached to a Logger call. Build one
@@ -64,11 +65,10 @@ type Logger interface {
 	// With returns a child Logger that carries fields on every subsequent
 	// line, in addition to whatever the receiver already carries.
 	With(fields ...Field) Logger
-	// Ctx returns a Logger correlated with the trace/span carried by ctx,
-	// the neutral equivalent of the package-level Ctx function. Like Ctx, it
-	// rebuilds from the service's base logger rather than the receiver, so
-	// fields added via With are not carried over -- call With after Ctx if
-	// both are needed.
+	// Ctx returns a Logger correlated with the trace/span carried by ctx.
+	// It derives from the receiver, so the service name and any fields
+	// already attached via With are carried over. When ctx has no valid
+	// span it returns the receiver unchanged.
 	Ctx(ctx context.Context) Logger
 }
 
@@ -87,6 +87,10 @@ func NewLogger(service string) Logger {
 
 // LoggerFromContext returns a neutral Logger correlated with the trace/span
 // carried by ctx -- the neutral equivalent of Ctx.
+//
+// Deprecated: like Ctx, this derives from the logger created by the most recent
+// call to New rather than from a logger the caller holds. Build a Logger with
+// NewLogger and use its Ctx method instead.
 func LoggerFromContext(ctx context.Context) Logger {
 	return neutralLogger{l: Ctx(ctx)}
 }
@@ -129,5 +133,12 @@ func (n neutralLogger) With(fields ...Field) Logger {
 }
 
 func (n neutralLogger) Ctx(ctx context.Context) Logger {
-	return neutralLogger{l: Ctx(ctx)}
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return n
+	}
+	return neutralLogger{l: n.l.With().
+		Str("trace_id", sc.TraceID().String()).
+		Str("span_id", sc.SpanID().String()).
+		Logger()}
 }

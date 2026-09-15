@@ -28,15 +28,23 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// serviceName holds the name attached by New so Ctx can rebuild an equivalent
-// base logger. It is set on the last call to New.
-var serviceName string
+// baseLogger holds the logger built by the most recent call to New so the
+// package-level Ctx can derive from it rather than rebuilding one. Storing the
+// logger itself -- not just its service name -- means Ctx resolves the writer
+// and level once at New time instead of re-reading the environment for every
+// line, and the atomic makes concurrent New/Ctx safe.
+//
+// A package-level function has no receiver, so with more than one logger in a
+// process this necessarily refers to whichever was created last. Prefer
+// Logger.Ctx, which derives from the logger it is called on.
+var baseLogger atomic.Pointer[zerolog.Logger]
 
 // levelFromEnv resolves the minimum log level from the LOG_LEVEL environment
 // variable (case-insensitive: trace, debug, info, warn, error, fatal, panic,
@@ -80,16 +88,28 @@ func writer() io.Writer {
 // Consumers no longer need to parse LOG_LEVEL or wire a writer themselves --
 // calling New is enough.
 func New(service string) zerolog.Logger {
-	serviceName = service
-	return zerolog.New(writer()).Level(levelFromEnv()).With().Timestamp().Str("service", service).Logger()
+	l := zerolog.New(writer()).Level(levelFromEnv()).With().Timestamp().Str("service", service).Logger()
+	baseLogger.Store(&l)
+	return l
 }
 
-// Ctx returns a zerolog.Logger derived from the base logger with the active
-// span's trace_id and span_id attached when ctx carries a valid span. This lets
-// every log line be correlated with its trace in the tracing backend. When no
-// valid span is present, it returns the plain base logger.
+// Ctx returns a zerolog.Logger derived from the logger created by the most
+// recent call to New, with the active span's trace_id and span_id attached when
+// ctx carries a valid span. This lets every log line be correlated with its
+// trace in the tracing backend. When no valid span is present, it returns the
+// plain base logger. If New has not been called, it falls back to a logger with
+// no service field.
+//
+// Deprecated: with two or more loggers in one process this returns whichever
+// was created last, which is rarely what the caller means. Use NewLogger and
+// the Logger.Ctx method, which derives from the logger it is called on.
 func Ctx(ctx context.Context) zerolog.Logger {
-	base := zerolog.New(writer()).Level(levelFromEnv()).With().Timestamp().Str("service", serviceName).Logger()
+	var base zerolog.Logger
+	if p := baseLogger.Load(); p != nil {
+		base = *p
+	} else {
+		base = zerolog.New(writer()).Level(levelFromEnv()).With().Timestamp().Logger()
+	}
 
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
