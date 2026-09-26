@@ -1,6 +1,6 @@
 # go-log 🪵
 
-> Tiny structured logging for Go services on [zerolog](https://github.com/rs/zerolog), with OpenTelemetry `trace_id`/`span_id` correlation baked in.
+> 🧵 Tiny structured logging for Go services on [zerolog](https://github.com/rs/zerolog), with OpenTelemetry `trace_id`/`span_id` correlation baked in.
 
 ## 📦 Install
 
@@ -23,7 +23,7 @@ l.Info().Msg("handling request")
 a logger that adds `trace_id` and `span_id` from the active OpenTelemetry span,
 pairing with [go-otel](https://github.com/Bugs5382/go-otel). 🔗
 
-> `Ctx` is **deprecated**. Having no receiver, it derives from whichever logger
+> ⚠️ `Ctx` is **deprecated**. Having no receiver, it derives from whichever logger
 > `New` created last, so a process with two loggers cannot get the right
 > `service` from both. Prefer `NewLogger` and the `Logger.Ctx` method below,
 > which derives from the logger it is called on.
