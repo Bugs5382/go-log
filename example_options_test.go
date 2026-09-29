@@ -1,21 +1,4 @@
-// Package log provides zerolog-based structured logging for Go services, with
-// OpenTelemetry trace_id/span_id correlation drawn from the active span
-// context.
-//
-// New and Ctx return a concrete zerolog.Logger for callers that already
-// depend on zerolog. NewLogger and LoggerFromContext return the neutral
-// Logger interface instead: no zerolog type appears in its method
-// signatures, so a consumer can wrap or depend on it without importing
-// zerolog directly. Both paths honor the same LOG_LEVEL/LOG_FORMAT
-// environment controls and the same trace correlation; zerolog stays an
-// internal implementation detail behind the neutral path.
-//
-// NewLoggerWithOptions builds a neutral Logger tuned by options: WithOutput
-// picks the io.Writer (a CLI uses os.Stderr), and WithDefaultLevel and
-// WithDefaultFormat set the fallbacks used when LOG_LEVEL or LOG_FORMAT is
-// unset or invalid. It returns a TraceLogger, which adds Trace; Nop returns a
-// TraceLogger that writes nothing.
-package log
+package log_test
 
 /*
 MIT License
@@ -39,3 +22,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
+
+import (
+	"os"
+
+	log "github.com/Bugs5382/go-log"
+)
+
+// ExampleNewLoggerWithOptions shows a CLI setup: logs on stderr so they never
+// mix with command output, console text unless LOG_FORMAT asks for JSON, and
+// a -v flag that selects trace unless LOG_LEVEL says otherwise.
+func ExampleNewLoggerWithOptions() {
+	verbose := true
+
+	level := log.LevelInfo
+	if verbose {
+		level = log.LevelTrace
+	}
+
+	logger := log.NewLoggerWithOptions("my-cli",
+		log.WithOutput(os.Stderr),
+		log.WithDefaultFormat(log.FormatConsole),
+		log.WithDefaultLevel(level),
+	)
+
+	logger.Trace("resolved config", log.F("path", "config.yaml"))
+	logger.Info("done", log.F("files", 12))
+}
+
+// ExampleNop shows the no-op Logger for tests and quiet modes.
+func ExampleNop() {
+	var logger log.Logger = log.Nop()
+	logger.Info("never written")
+	log.Trace(logger, "never written either")
+}
