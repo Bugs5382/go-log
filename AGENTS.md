@@ -28,12 +28,14 @@ surface's method signatures.
 
 - `log.go` - the zerolog-returning surface (`New`, `Ctx`) plus the shared `LOG_LEVEL`/`LOG_FORMAT`
   env resolution (`levelFromEnv`, `writer`) both surfaces use.
-- `neutral.go` - the neutral surface: `Field`, `F`, the `Logger` interface, `NewLogger`,
-  `LoggerFromContext`, and the `neutralLogger` zerolog adapter (zerolog stays internal to this
-  file).
-- `log_test.go`, `neutral_test.go` - unit tests for each surface.
-- `example_neutral_test.go` - a runnable example (`ExampleLogger`) demonstrating the neutral
-  surface with zero zerolog references.
+- `neutral.go` - the neutral surface: `Field`, `F`, the `Logger` and `TraceLogger` interfaces,
+  `NewLogger`, `LoggerFromContext`, `Trace`, `Nop`, and the `neutralLogger` zerolog adapter.
+- `options.go` - `NewLoggerWithOptions` and its options (`WithOutput`, `WithDefaultLevel`,
+  `WithDefaultFormat`) with the `Level` and `Format` string types. Options only change the
+  fallbacks and the stdout destination; a valid `LOG_LEVEL`/`LOG_FORMAT` still wins.
+- `log_test.go`, `neutral_test.go`, `options_test.go` - unit tests for each surface.
+- `example_neutral_test.go`, `example_options_test.go` - runnable examples (`ExampleLogger`,
+  `ExampleNewLoggerWithOptions`, `ExampleNop`) with zero zerolog references.
 
 ## Build, test, lint
 
@@ -51,7 +53,10 @@ surface's method signatures.
   and mark the PR ready when the work is finished; see CLAUDE.md "CI and Actions minutes".
 - Any change to the neutral `Logger` interface is a public-API change: keep it additive
   (non-breaking) unless the change is explicitly scoped as a major version bump, and update this
-  file plus the README when the surface changes.
+  file plus the README when the surface changes. Adding a method to `Logger` breaks outside
+  implementers (gorelease flags it), which is why `Trace` sits on `TraceLogger`; the same goes for
+  changing `NewLogger`'s signature, which is why options have their own constructor. Check with
+  `gorelease -base=<last tag>` before a release.
 - `neutralLogger.Ctx` rebuilds from the package-level `Ctx` (same as the zerolog surface) rather
   than merging in the receiver's own `With` fields -- that mirrors `Ctx`'s existing behavior, not a
   bug.

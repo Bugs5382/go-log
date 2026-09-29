@@ -72,6 +72,35 @@ type Logger interface {
 	Ctx(ctx context.Context) Logger
 }
 
+// TraceLogger is a Logger that can also log at trace level. It is a separate
+// interface because adding a method to Logger would break every type outside
+// this package that implements it.
+//
+// Every Logger this package returns is a TraceLogger, including the children
+// from With and Ctx. NewLoggerWithOptions and Nop return one directly; for a
+// value typed as Logger, use the Trace function.
+type TraceLogger interface {
+	Logger
+	// Trace logs msg at trace level with the given structured fields.
+	Trace(msg string, fields ...Field)
+}
+
+// Trace logs msg at trace level through l when l is a TraceLogger, as every
+// Logger from this package is. For a Logger without a Trace method the line
+// is dropped, since trace is below every level such a Logger can write.
+func Trace(l Logger, msg string, fields ...Field) {
+	if t, ok := l.(TraceLogger); ok {
+		t.Trace(msg, fields...)
+	}
+}
+
+// Nop returns a TraceLogger that writes nothing, for tests and quiet modes. It
+// ignores LOG_LEVEL and LOG_FORMAT. Fatal still ends the process with a
+// non-zero exit code, since callers rely on it not returning.
+func Nop() TraceLogger {
+	return neutralLogger{l: zerolog.Nop()}
+}
+
 // neutralLogger adapts a zerolog.Logger to Logger. zerolog is confined to
 // this file; it never appears in the Logger interface above.
 type neutralLogger struct {
@@ -102,6 +131,10 @@ func withFields(e *zerolog.Event, fields []Field) *zerolog.Event {
 		e = e.Interface(f.Key, f.Val)
 	}
 	return e
+}
+
+func (n neutralLogger) Trace(msg string, fields ...Field) {
+	withFields(n.l.Trace(), fields).Msg(msg)
 }
 
 func (n neutralLogger) Debug(msg string, fields ...Field) {

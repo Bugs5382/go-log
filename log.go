@@ -52,13 +52,16 @@ var baseLogger atomic.Pointer[zerolog.Logger]
 // default so a service is never accidentally silent or debug-noisy in
 // production. Deployments raise verbosity by setting LOG_LEVEL (e.g. trace in
 // dev) without any code change.
-func levelFromEnv() zerolog.Level {
+//
+// fallback replaces info as that default; it comes from WithDefaultLevel, and
+// LOG_LEVEL still wins whenever it names a level.
+func levelFromEnv(fallback zerolog.Level) zerolog.Level {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		if lvl, err := zerolog.ParseLevel(strings.ToLower(v)); err == nil {
 			return lvl
 		}
 	}
-	return zerolog.InfoLevel
+	return fallback
 }
 
 // writer resolves the output(s) from LOG_FORMAT. JSON is the default because
@@ -71,15 +74,31 @@ func levelFromEnv() zerolog.Level {
 //   - "both": JSON on stdout (kept parseable for OTel/Loki) AND a pretty
 //     rendering on stderr for a human tailing the console -- both at once,
 //     so trace correlation is never lost to get a readable console.
-func writer() io.Writer {
-	switch strings.ToLower(os.Getenv("LOG_FORMAT")) {
-	case "console", "pretty":
-		return zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
-	case "both":
-		return zerolog.MultiLevelWriter(os.Stdout, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
-	default:
-		return os.Stdout
+//
+// out takes the place of stdout in every case above (WithOutput); the pretty
+// half of "both" stays on stderr. fallback is the format used when LOG_FORMAT
+// is unset or unrecognized (WithDefaultFormat), json unless set.
+func writer(out io.Writer, fallback Format) io.Writer {
+	format := strings.ToLower(os.Getenv("LOG_FORMAT"))
+	if !knownFormat(format) {
+		format = string(fallback)
 	}
+	switch format {
+	case "console", "pretty":
+		return zerolog.ConsoleWriter{Out: out, TimeFormat: time.RFC3339}
+	case "both":
+		return zerolog.MultiLevelWriter(out, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	default:
+		return out
+	}
+}
+
+func knownFormat(f string) bool {
+	switch f {
+	case "json", "console", "pretty", "both":
+		return true
+	}
+	return false
 }
 
 // New returns a zerolog.Logger with a timestamp and the given service name
@@ -88,7 +107,14 @@ func writer() io.Writer {
 // Consumers no longer need to parse LOG_LEVEL or wire a writer themselves --
 // calling New is enough.
 func New(service string) zerolog.Logger {
-	l := zerolog.New(writer()).Level(levelFromEnv()).With().Timestamp().Str("service", service).Logger()
+	return build(service, defaultConfig())
+}
+
+// build is the one place a service logger is assembled, so New and
+// NewLoggerWithOptions cannot drift apart. It also records the result for the
+// package-level Ctx and LoggerFromContext.
+func build(service string, c config) zerolog.Logger {
+	l := zerolog.New(writer(c.out, c.format)).Level(levelFromEnv(c.level)).With().Timestamp().Str("service", service).Logger()
 	baseLogger.Store(&l)
 	return l
 }
@@ -108,7 +134,7 @@ func Ctx(ctx context.Context) zerolog.Logger {
 	if p := baseLogger.Load(); p != nil {
 		base = *p
 	} else {
-		base = zerolog.New(writer()).Level(levelFromEnv()).With().Timestamp().Logger()
+		base = zerolog.New(writer(os.Stdout, FormatJSON)).Level(levelFromEnv(zerolog.InfoLevel)).With().Timestamp().Logger()
 	}
 
 	sc := trace.SpanContextFromContext(ctx)

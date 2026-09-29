@@ -62,6 +62,47 @@ The package-level `Ctx` and `LoggerFromContext` are **deprecated** in favour of
 `Logger.Ctx` -- both read the logger most recently built by `New`, which is
 ambiguous once a process has more than one.
 
+### Options (output, default level and format)
+
+`NewLoggerWithOptions` builds the same neutral `Logger` as `NewLogger`, tuned
+by options. With no options it behaves exactly like `NewLogger`.
+
+```go
+level := log.LevelInfo
+if verbose {
+	level = log.LevelTrace
+}
+
+logger := log.NewLoggerWithOptions("my-cli",
+	log.WithOutput(os.Stderr),                // logs never mix with stdout
+	log.WithDefaultFormat(log.FormatConsole), // plain text unless LOG_FORMAT says otherwise
+	log.WithDefaultLevel(level),              // used only when LOG_LEVEL is unset or invalid
+)
+logger.Trace("resolved config", log.F("path", path))
+```
+
+- `WithOutput(w)` sends every line to `w` instead of stdout, in any format.
+  With `LOG_FORMAT=both` the JSON half goes to `w` and the console half still
+  goes to stderr.
+- `WithDefaultLevel(level)` replaces info as the fallback level. 🎛 **The
+  environment still wins:** a valid `LOG_LEVEL` always overrides it. `Level` is
+  a string type using the `LOG_LEVEL` names (`log.LevelTrace` ...
+  `log.LevelDisabled`), so `log.Level(flagValue)` works too.
+- `WithDefaultFormat(format)` replaces JSON as the fallback format
+  (`log.FormatJSON`, `log.FormatConsole`, `log.FormatBoth`). A valid
+  `LOG_FORMAT` always overrides it.
+
+### Trace and the no-op Logger
+
+`NewLoggerWithOptions` and `Nop` return a `TraceLogger`: a `Logger` plus a
+`Trace(msg, fields...)` method. Every logger this package hands out (children
+from `With` and `Ctx` too) has `Trace`; for a value typed as `Logger`, call
+`log.Trace(logger, msg, fields...)`. `Trace` lives on its own interface
+because adding a method to `Logger` would break anyone who implements it.
+
+`log.Nop()` writes nothing, whatever `LOG_LEVEL` says, which suits tests and
+quiet modes. Its `Fatal` still exits the process, as callers expect.
+
 ## 🛠 Develop
 
 ```bash
