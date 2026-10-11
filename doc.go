@@ -15,6 +15,11 @@
 // WithDefaultFormat set the fallbacks used when LOG_LEVEL or LOG_FORMAT is
 // unset or invalid. It returns a TraceLogger, which adds Trace; Nop returns a
 // TraceLogger that writes nothing.
+//
+// LOG_LEVEL sets the start level. SetLevel changes the level live for the
+// whole process, reaching loggers that already exist, and WatchLevelFile (or
+// WatchLevelFileFromEnv with LOG_LEVEL_FILE) follows a one-word level file
+// such as a mounted Kubernetes ConfigMap key.
 package log
 
 /*

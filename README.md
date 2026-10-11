@@ -103,6 +103,40 @@ because adding a method to `Logger` would break anyone who implements it.
 `log.Nop()` writes nothing, whatever `LOG_LEVEL` says, which suits tests and
 quiet modes. Its `Fatal` still exits the process, as callers expect.
 
+### Live level changes
+
+The level is live and process-wide. Every logger is built at trace and filtered
+by one atomic level that zerolog reads on each event, so a change reaches the
+loggers a service already holds, their `With`/`Ctx` children and any
+package-level logger, with no restart and no rebuild. `LOG_LEVEL` (or the
+`WithDefaultLevel` fallback) is the start value.
+
+```go
+logger := log.NewLogger("my-service")
+
+// Follow the level in the file named by LOG_LEVEL_FILE, if it is set:
+log.WatchLevelFileFromEnv(ctx)
+
+// Or name the file directly, or set the level from code:
+log.WatchLevelFile(ctx, "/etc/my-service/log-level")
+_ = log.SetLevel(log.LevelDebug)
+fmt.Println(log.CurrentLevel()) // debug
+```
+
+- `WatchLevelFile(ctx, path)` reads a one-word level file (`trace`, `debug`,
+  `info`, `warn`, `error`) before it returns, then re-reads it every two
+  seconds until `ctx` ends. It follows symlinks on every read, so a Kubernetes
+  ConfigMap volume works as the source: edit the ConfigMap and the pods pick it
+  up once the kubelet syncs the volume (up to about a minute).
+- 🚦 **Bad input never silences a service:** an unknown word keeps the current
+  level and logs a warning. A missing, unreadable or empty file means the start
+  level from `LOG_LEVEL`. The watcher's own lines (a change, a bad word, a
+  missing file) are written whatever the level is, unless it is `disabled`.
+- `SetLevel(level)` returns an error for an unknown name and leaves the level
+  alone. Once a live level is set, loggers built later keep it.
+- One level per process: the live level is zerolog's global level, so it also
+  filters any other zerolog logger in the process.
+
 ## 🛠 Develop
 
 ```bash

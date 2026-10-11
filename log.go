@@ -113,8 +113,13 @@ func New(service string) zerolog.Logger {
 // build is the one place a service logger is assembled, so New and
 // NewLoggerWithOptions cannot drift apart. It also records the result for the
 // package-level Ctx and LoggerFromContext.
+//
+// The logger itself is built at trace; the level from LOG_LEVEL (or the
+// default) becomes the process-wide live level, which SetLevel and
+// WatchLevelFile can change later without rebuilding any logger.
 func build(service string, c config) zerolog.Logger {
-	l := zerolog.New(writer(c.out, c.format)).Level(levelFromEnv(c.level)).With().Timestamp().Str("service", service).Logger()
+	l := zerolog.New(writer(c.out, c.format)).Level(zerolog.TraceLevel).With().Timestamp().Str("service", service).Logger()
+	applyStartLevel(levelFromEnv(c.level))
 	baseLogger.Store(&l)
 	return l
 }
