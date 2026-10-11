@@ -23,6 +23,8 @@ surface's method signatures.
   and `LOG_FORMAT` (`json` default, `console`/`pretty`, or `both`) from the environment, and both
   attach `trace_id`/`span_id` from the active OpenTelemetry span when one is present in the
   context passed to `Ctx`/`LoggerFromContext`.
+- `LOG_LEVEL` is the start level only. `SetLevel` and `WatchLevelFile` (or `WatchLevelFileFromEnv`
+  with `LOG_LEVEL_FILE`) change the level live for the whole process, existing loggers included.
 
 ## Layout
 
@@ -33,7 +35,12 @@ surface's method signatures.
 - `options.go` - `NewLoggerWithOptions` and its options (`WithOutput`, `WithDefaultLevel`,
   `WithDefaultFormat`) with the `Level` and `Format` string types. Options only change the
   fallbacks and the stdout destination; a valid `LOG_LEVEL`/`LOG_FORMAT` still wins.
-- `log_test.go`, `neutral_test.go`, `options_test.go` - unit tests for each surface.
+- `level.go` - the live, process-wide level: `SetLevel`, `CurrentLevel`, `WatchLevelFile`,
+  `WatchLevelFileFromEnv` and `LevelFileEnv` (`LOG_LEVEL_FILE`). Loggers are built at trace and
+  filtered by zerolog's global level; `build` records the `LOG_LEVEL` start level through
+  `applyStartLevel`, which leaves a live level set by `SetLevel` in place.
+- `log_test.go`, `neutral_test.go`, `options_test.go`, `level_test.go` - unit tests for each
+  surface. Tests that change the live level call `isolateLevel` so it never leaks between tests.
 - `example_neutral_test.go`, `example_options_test.go` - runnable examples (`ExampleLogger`,
   `ExampleNewLoggerWithOptions`, `ExampleNop`) with zero zerolog references.
 
